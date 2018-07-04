@@ -3,41 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="data:image/vnd.microsoft.icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAA/wAAAP8AAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAD/AAAAYAAAAP8AAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAP8AAAD/AAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAA/wAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAD/AAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAP8AAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAA/wAAAGAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAD/AAAA/wAAAP8AAAD/AAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAA/wAAAP8AAAAAAAAA/wAAAP8AAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAP8AAAAAAAAAAAAAAAAAAAD/AAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAD/AAAAAAAAAAAAAAAAAAAA/wAAAP8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AAAA/wAAAP8AAAD/AAAA/wAAAP8AAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP8AAAD/AAAA/wAAAP8AAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//8AAOf/AACH/wAAwf8AAOH/AADx/wAA+P8AAPx/AAD+LwAA/wMAAP8RAAD/OQAA/zkAAP8BAAD/gwAA//8AAA==">
+    <link rel="icon" href="https://raw.githubusercontent.com/scheibo/auth/master/favicon.png">
     <title>Login</title>
     <style>
-      input {
-        font-family: "Roboto", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
-        font-size: 24px;
-      }
-      input[type=password] {
-        padding: 5px 0px 5px 10px;
-        border: 1px solid #c7d0d2;
-        border-radius: 2px;
-        box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .4), 0 0 0 5px #f5f7f8;
-        -webkit-transition: all .4s ease;
-        -moz-transition: all .4s ease;
-        transition: all .4s ease;
-      }
-      input[type=password]:hover {
-          border: 1px solid #b6bfc0;
-          box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .7), 0 0 0 5px #f5f7f8;
-      }
-      input[type=password]:focus {
-          border: 1px solid #a8c9e4;
-          box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .4), 0 0 0 5px #e6f2f9;
-      }
-      input[type=submit] {
-        padding: 5px;
-        border-radius: 2px;
-        border: 1px solid #66add6;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .5);
-        cursor: pointer;
-      }
-      form {
-        margin: 0 auto;
-          text-align: center;
-      }
       #container {
         position: fixed;
         top: 30%;
@@ -47,19 +15,70 @@
         margin-top: -20px;
         margin-left: -200px;
       }
+
+      form {
+        text-align: center;
+      }
+
+      svg {
+        width: 1.3em;
+        position: absolute;
+        padding: 8px;
+        color: #888 ;
+      }
+
+      input {
+        font-family: "Roboto", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+        font-size: 24px;
+      }
+
+      input[type=password] {
+        padding: 5px 0px 5px 35px;
+        border: 1px solid #c7d0d2;
+        border-radius: 2px;
+        box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .4), 0 0 0 5px #f5f7f8;
+        -webkit-transition: all .4s ease;
+        -moz-transition: all .4s ease;
+        transition: all .4s ease;
+      }
+
+      input[type=password]:hover {
+          border: 1px solid #b6bfc0;
+          box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .7), 0 0 0 5px #f5f7f8;
+      }
+
+      input[type=password]:focus {
+          border: 1px solid #a8c9e4;
+          box-shadow: inset 0 1.5px 3px rgba(190, 190, 190, .4), 0 0 0 5px #e6f2f9;
+      }
+
+      input[type=submit] {
+        display: none;
+      }
+
       @media(max-width: 425px) {
+        svg {
+          width: 1em;
+          padding: 6px;
+        }
+
         input {
-          font-size: 16px;
+          font-size: 18px;
+        }
+
+        input[type=password] {
+          padding: 5px 0px 5px 28px;
         }
       }
     </style>
   </head>
   <body>
-    <div id="container">       
+    <div id="container">
       <form action="/login" method="post">
         <!-- TODO xsrf token -->
+        <svg aria-hidden="true" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M400 224h-24v-72C376 68.2 307.8 0 224 0S72 68.2 72 152v72H48c-26.5 0-48 21.5-48 48v192c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V272c0-26.5-21.5-48-48-48zm-104 0H152v-72c0-39.7 32.3-72 72-72s72 32.3 72 72v72z"></path></svg>
         <input type="password" id="password" name="password">
-        <input type="submit" value="➜">
+        <input type="submit" value="Submit">
       </form>
     </div>
   </body>
