@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/securecookie"
+	"github.com/tdewolff/minify"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/xsrftoken"
@@ -58,7 +59,7 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) *http.Ha
 			loginPath = path[0]
 		}
 
-		t := template.Must(template.ParseFiles("login.html"))
+		t := template.Must(compileTemplates("login.html"))
 		t.Execute(w, struct {
 			Favicon string
 			Title   string
@@ -218,4 +219,31 @@ func isHTTPS(req *http.Request) bool {
 
 func httpError(w http.ResponseWriter, code int) {
 	http.Error(w, http.StatusText(code), code)
+}
+
+func compileTemplates(filenames ...string) (*template.Template, error) {
+	m := minify.New()
+	m.AddFunc("text/html", html.Minify)
+
+	var tmpl *template.Template
+	for _, filename := range filenames {
+		name := filepath.Base(filename)
+		if tmpl == nil {
+			tmpl = template.New(name)
+		} else {
+			tmpl = tmpl.New(name)
+		}
+
+		b, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return nil, err
+		}
+
+		mb, err := m.Bytes("text/html", b)
+		if err != nil {
+			return nil, err
+		}
+		tmpl.Parse(string(mb))
+	}
+	return tmpl, nil
 }
