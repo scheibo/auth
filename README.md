@@ -1,3 +1,3 @@
-# auth
+# a1
 
-auth is a simple authentication and authorization library for Go.
+a1 provides simple authentication and authorization helpers for a single user service in Go.

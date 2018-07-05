@@ -1,4 +1,4 @@
-package auth
+package a1
 
 import (
 	"crypto/sha512"
@@ -61,9 +61,9 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) *http.Ha
 		t := template.Must(template.ParseFiles("login.html"))
 		t.Execute(w, struct {
 			Favicon string
-			Title string
-			Path  string
-			Token string
+			Title   string
+			Path    string
+			Token   string
 		}{
 			favicon, title, loginPath, c.XSRF(loginPath),
 		})
