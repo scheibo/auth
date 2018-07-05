@@ -48,6 +48,10 @@ func New(hash string) *Client {
 }
 
 func (c *Client) LoginPage(path ...string) *http.Handler {
+	return CustomLoginPage("https://raw.githubusercontent.com/scheibo/auth/master/favicon.png", "Login")
+}
+
+func (c *Client) CustomLoginPage(favicon, title string, path ...string) *http.Handler {
 	return &http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		loginPath := LoginPath
 		if len(path) > 0 && path[0] != "" {
@@ -56,11 +60,12 @@ func (c *Client) LoginPage(path ...string) *http.Handler {
 
 		t := template.Must(template.ParseFiles("login.html"))
 		t.Execute(w, struct {
+			Favicon string
+			Title string
 			Path  string
 			Token string
 		}{
-			loginPath,
-			c.XSRF(loginPath),
+			favicon, title, loginPath, c.XSRF(loginPath),
 		})
 	})
 }
