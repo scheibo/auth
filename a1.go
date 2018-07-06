@@ -3,9 +3,8 @@
 // then initialize a Client with using New with the hash so that it may then be
 // used to authenticate web sevices. a1 provides its own simple LoginPage which
 // POSTS to /login to complete the Login flow, as well as a handler for Logout.
-// a1 uses a secure cookie to store the client's login state, though it also
-// supports an 'Authorization' header with the password hash for simple
-// debugging purposes. a1 also provides rate limiting and XSRF functionality.
+// a1 uses a secure cookie to store the client's login state. a1 also provides
+// rate limiting and XSRF functionality.
 package a1
 
 import (
@@ -16,12 +15,18 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"runtime"
 	"time"
+
+	"log" // TODO
 
 	"github.com/didip/tollbooth"
 	"github.com/gorilla/securecookie"
 	"github.com/tdewolff/minify"
+	"github.com/tdewolff/minify/css"
 	"github.com/tdewolff/minify/html"
+	"github.com/tdewolff/minify/js"
+	"github.com/tdewolff/minify/svg"
 
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/net/xsrftoken"
@@ -100,11 +105,12 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) http.Han
 			loginPath = path[0]
 		}
 
-		t := template.Must(compileTemplates("login.html"))
+		_, src, _, _ := runtime.Caller(0)
+		t := template.Must(compileTemplates(filepath.Join(filepath.Dir(src), "login.html")))
 		_ = t.Execute(w, struct {
 			Favicon string
 			Title   string
-			Path    string
+			LoginPath    string
 			Token   string
 		}{
 			favicon, title, loginPath, c.XSRF(loginPath),
@@ -139,10 +145,7 @@ func (c *Client) Login(paths ...string) http.Handler {
 			httpError(w, 500, errors.New("login request must use POST"))
 		}
 
-		password := r.PostFormValue("password")
-		sha := sha512.Sum512([]byte(password))
-		err := bcrypt.CompareHashAndPassword(c.hash, sha[:64])
-		if err != nil {
+		if err := c.checkPassword(r.PostFormValue("password")); err != nil {
 			httpError(w, 401, err)
 			return
 		}
@@ -228,10 +231,6 @@ func (c *Client) EnsureAuth(handler http.Handler) http.Handler {
 // session is present and hasn't expired and the decoded cookie matches the
 // session).
 func (c *Client) IsAuth(r *http.Request) bool {
-	// Useful for debugging with curl - this is *not* a valid digest auth header.
-	if r.Header.Get(CookieName) == fmt.Sprintf("Hash %s", c.hash) {
-		return true
-	}
 	if c.session == nil {
 		return false
 	}
@@ -265,6 +264,11 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 	}, nil
 }
 
+func (c *Client) checkPassword(password string) error {
+	sha := sha512.Sum512([]byte(password))
+	return bcrypt.CompareHashAndPassword(c.hash, sha[:64])
+}
+
 func generateKey() []byte {
 	return securecookie.GenerateRandomKey(32)
 }
@@ -279,7 +283,10 @@ func httpError(w http.ResponseWriter, code int, err ...error) {
 
 func compileTemplates(filenames ...string) (*template.Template, error) {
 	m := minify.New()
+	m.AddFunc("text/css", css.Minify)
 	m.AddFunc("text/html", html.Minify)
+	m.AddFunc("text/javascript", js.Minify)
+	m.AddFunc("image/svg+xml", svg.Minify)
 
 	var tmpl *template.Template
 	for _, filename := range filenames {
