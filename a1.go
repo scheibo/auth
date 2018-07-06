@@ -1,3 +1,11 @@
+// a1 provides simple authentication and authorization helpers for a single user
+// service. Clients should use Hash to hash their password ahead of time,
+// then initialize a Client with using New with the hash so that it may then be
+// used to authenticate web sevices. a1 provides its own simple LoginPage which
+// POSTS to /login to complete the Login flow, as well as a handler for Logout.
+// a1 uses a secure cookie to store the client's login state, though it also
+// supports an 'Authorization' header with the password hash for simple
+// debugging purposes. a1 also provides rate limiting and XSRF functionality.
 package a1
 
 import (
@@ -19,12 +27,24 @@ import (
 	"golang.org/x/net/xsrftoken"
 )
 
+// LoginPath is the default path used for hosting both the LoginPage (GET) and
+// for performing Login (POST). Alternative paths can be passed to these
+// functions if desired.
 const LoginPath = "/login"
+
+// LogoutPath is the default path for logging out. An alternative path can be
+// passed to Logout if desired.
 const LogoutPath = "/logout"
+
+// RedirectPath is the default path the user is redirected to after a
+// successful Login or Logout. Alternatives may be used instead.
 const RedirectPath = "/"
 
+// CookieName used by a1 for authorization.
 const CookieName = "Authorization"
 
+// Client holds the state required by a1 to verify a user. A new client can be
+// created using New.
 type Client struct {
 	hash []byte
 
@@ -36,17 +56,25 @@ type Client struct {
 	blockKey []byte
 }
 
+// Session holds the state for a logged in user. Sessions expire after an
+// interval (default 30 days).
 type Session struct {
 	id      string
 	expires time.Time
 }
 
+// Hash returns the hash of a password that should be passed to New and used to
+// authenticate the user.
 func Hash(password string) (string, error) {
+	// In case the user chose a short password we SHA512 it first to make
+	// sure all the passwords we bcrypt are of a decent length.
 	sha := sha512.Sum512([]byte(password))
 	bytes, err := bcrypt.GenerateFromPassword(sha[:64], bcrypt.DefaultCost)
 	return string(bytes), err
 }
 
+// New takes a hash returned from Hash and returns a new Client which can be
+// used for authenticating users.
 func New(hash string) *Client {
 	return &Client{
 		hash:     []byte(hash),
@@ -56,16 +84,17 @@ func New(hash string) *Client {
 	}
 }
 
+// LoginPage returns a default login page that will POST its form to the
+// optional path argument or LoginPath. The page can be further customized
+// through the use of CustomLoginPage.
 func (c *Client) LoginPage(path ...string) http.Handler {
 	return c.CustomLoginPage("https://raw.githubusercontent.com/scheibo/auth/master/favicon.png", "Login")
 }
 
+// CustomLoginPage allows for tweaking the favicon and title of the page that
+// LoginPage provides.
 func (c *Client) CustomLoginPage(favicon, title string, path ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isHTTPS(r) {
-			httpError(w, 500, errors.New("login page must be served over HTTPS"))
-		}
-
 		loginPath := LoginPath
 		if len(path) > 0 && path[0] != "" {
 			loginPath = path[0]
@@ -83,10 +112,15 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) http.Han
 	})
 }
 
-func RateLimit(handler http.Handler, qps float64) http.Handler {
+// RateLimit restricts the qps of a wrapped handler.
+func RateLimit(qps float64, handler http.Handler) http.Handler {
 	return tollbooth.LimitFuncHandler(tollbooth.NewLimiter(qps, nil), handler.ServeHTTP)
 }
 
+// Login authenticates users provided the password they POST hash to the same
+// hash the client was initialized with. By default, LoginPath is used for
+// verifying XSRF and users are redirected to RedirectPath after successfully
+// loggin in, but alternatives may be passed in through the paths parameter.
 func (c *Client) Login(paths ...string) http.Handler {
 	loginPath, redirectPath := LoginPath, RedirectPath
 	if len(paths) >= 1 {
@@ -98,10 +132,9 @@ func (c *Client) Login(paths ...string) http.Handler {
 		}
 	}
 
-	return RateLimit(c.CheckXSRF(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isHTTPS(r) {
-			httpError(w, 500, errors.New("login request must be over HTTPS"))
-		}
+	// We rate limit our login attempts to prevent an attacker for repeatedly guessing passwords.
+	// We also restrict the XSRF token to be scoped to the loginPath.
+	return RateLimit(1, c.CheckXSRF(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			httpError(w, 500, errors.New("login request must use POST"))
 		}
@@ -126,9 +159,11 @@ func (c *Client) Login(paths ...string) http.Handler {
 		http.SetCookie(w, cookie)
 
 		http.Redirect(w, r, redirectPath, 302)
-	}), loginPath), 1)
+	}), loginPath))
 }
 
+// Logout logs a user out, clearing the session and then redirecting them to the
+// optional path passed in or RedirectPath.
 func (c *Client) Logout(path ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		redirectPath := RedirectPath
@@ -150,6 +185,8 @@ func (c *Client) Logout(path ...string) http.Handler {
 	})
 }
 
+// XSRF returns a token (which can optionally be scoped to a specific path) to
+// be used for thrwating cross-site request forgery along with CheckXSRF.
 func (c *Client) XSRF(path ...string) string {
 	p := ""
 	if len(path) > 0 {
@@ -158,6 +195,8 @@ func (c *Client) XSRF(path ...string) string {
 	return xsrftoken.Generate(c.xsrfKey, "", p)
 }
 
+// CheckXSRF wraps a handler and ensures POST requests to the handler contain a
+// token returned by an XSRF call (with optional path) in the body.
 func (c *Client) CheckXSRF(handler http.Handler, path ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := ""
@@ -173,6 +212,8 @@ func (c *Client) CheckXSRF(handler http.Handler, path ...string) http.Handler {
 	})
 }
 
+// EnsureAuth wraps a handler and ensures requests to it are authenticated
+// before allowing it to proceed.
 func (c *Client) EnsureAuth(handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !c.IsAuth(r) {
@@ -183,16 +224,19 @@ func (c *Client) EnsureAuth(handler http.Handler) http.Handler {
 	})
 }
 
+// IsAuth checks whether a request r is authenticated by this client (i.e. the
+// session is present and hasn't expired and the decoded cookie matches the
+// session).
 func (c *Client) IsAuth(r *http.Request) bool {
+	// Useful for debugging with curl - this is *not* a valid digest auth header.
+	if r.Header.Get(CookieName) == fmt.Sprintf("Hash %s", c.hash) {
+		return true
+	}
 	if c.session == nil {
 		return false
 	}
 	if c.session.expires.Before(time.Now()) {
 		return false
-	}
-	// Useful for debugging with curl - this is *not* a valid digest auth header.
-	if r.Header.Get(CookieName) == fmt.Sprintf("Hash %s", c.hash) {
-		return true
 	}
 	if cookie, err := r.Cookie(CookieName); err == nil {
 		value := make(map[string]string)
@@ -223,10 +267,6 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 
 func generateKey() []byte {
 	return securecookie.GenerateRandomKey(32)
-}
-
-func isHTTPS(r *http.Request) bool {
-	return r.TLS != nil
 }
 
 func httpError(w http.ResponseWriter, code int, err ...error) {
