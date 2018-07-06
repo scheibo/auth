@@ -2,10 +2,13 @@ package a1
 
 import (
 	"crypto/sha512"
+	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"time"
 
+	"github.com/didip/tollbooth/limiter"
 	"github.com/gorilla/securecookie"
 	"github.com/tdewolff/minify"
 
@@ -54,6 +57,10 @@ func (c *Client) LoginPage(path ...string) *http.Handler {
 
 func (c *Client) CustomLoginPage(favicon, title string, path ...string) *http.Handler {
 	return &http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isHTTPS(r) {
+			httpError(w, 500, errors.New("login page must be served over HTTPS"))
+		}
+
 		loginPath := LoginPath
 		if len(path) > 0 && path[0] != "" {
 			loginPath = path[0]
@@ -71,33 +78,34 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) *http.Ha
 	})
 }
 
+func RateLimit(handler *httpHandler, qps float64) *http.Handler {
+	return &tollbooth.LimitFuncHandler(tollbooth.NewLimiter(qps, nil), handler)
+}
+
 func (c *Client) Login(paths ...string) *http.Handler {
 	loginPath, redirectPath := LoginPath, RedirectPath
-	if len(path) == 1 && path[0] != "" {
-		loginPath = path[0]
-	}
-	if len(path) > 1 {
+	if len(path) >= 1 {
 		if path[0] != "" {
 			loginPath = path[0]
 		}
-		if path[1] != "" {
+		if len(path) > 1 && path[1] != "" {
 			redirectPath = path[1]
 		}
 	}
 
-	return c.CheckXRSF(&http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isHTTPS(req) {
-			return errors.New("login request must be over HTTPS")
+	return RateLimit(c.CheckXRSF(&http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isHTTPS(r) {
+			httpError(w, 500, errors.New("login request must be over HTTPS"))
 		}
 		if r.Method != "POST" {
-			return errors.New("login request must use POST")
+			httpError(w, 500, errors.New("login request must use POST"))
 		}
 
 		var password, token = r.PostFormValue("password")
 		sha := sha512.Sum512([]byte(password))
 		err := bcrypt.CompareHashAndPassword(hash, sha)
 		if err != nil {
-			httpError(w, 401)
+			httpError(w, 401, err)
 			return
 		}
 
@@ -105,16 +113,15 @@ func (c *Client) Login(paths ...string) *http.Handler {
 			id:      string(generateKey()),
 			expires: time.Now().AddDate(0, 0, 30),
 		}
-		//w.Header().Set("Authorization", fmt.Sprintf("Token %s", c.session.id))
 		cookie, err := c.newCookie()
 		if err != nil {
-			httpError(w, 500)
+			httpError(w, 500, err)
 			return
 		}
 		http.SetCookie(w, cookie)
 
 		http.Redirect(w, r, redirectPath, 302)
-	}), loginPath)
+	}), loginPath), 1)
 }
 
 func (c *Client) Logout(paths ...string) *http.Handler {
@@ -125,7 +132,6 @@ func (c *Client) Logout(paths ...string) *http.Handler {
 		}
 
 		c.session = nil
-		//w.Header().Del("Authorization")
 		http.SetCookie(w, &http.Cookie{
 			Name:     "Authorization",
 			Value:    "",
@@ -155,7 +161,7 @@ func (c *Client) CheckXSRF(handler *http.Handler, path ...string) *http.Handler 
 		}
 
 		if !xsrftoken.Valid(r.PostFormValue("token"), c.xsrfKey, "", p) {
-			httpError(w, 401)
+			httpError(w, 401, errors.New("invalid XSRF")
 			return
 		}
 		handler.ServeHTTP(w, r)
@@ -172,16 +178,17 @@ func (c *Client) EnsureAuth(handler *http.Handler) *http.Handler {
 	})
 }
 
-func (c *Client) IsAuth(req *http.Request) bool {
+func (c *Client) IsAuth(r *http.Request) bool {
 	if c.session == nil {
 		return false
 	}
 	if c.session.expires.Before(time.Now()) {
 		return false
 	}
-	//if req.Header.Get("Authorization") == fmt.Sprintf("Token %s", c.session.id) {
-	//return true
-	//}
+	// Useful for debugging with curl - this is *not* a valid digest auth header.
+	if r.Header.Get("Authorization") == fmt.Sprintf("Hash %s", c.hash) {
+	  return true
+	}
 	if cookie, err := r.Cookie(cookieName); err == nil {
 		value := make(map[string]string)
 		if err = c.cookie.Decode(cookieName, cookie.Value, &value); err == nil {
@@ -213,12 +220,16 @@ func generateKey() string {
 	return securecookie.GenerateRandomKey(32)
 }
 
-func isHTTPS(req *http.Request) bool {
-	return req.TLS != nil
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil
 }
 
-func httpError(w http.ResponseWriter, code int) {
-	http.Error(w, http.StatusText(code), code)
+func httpError(w http.ResponseWriter, code int, err...error) {
+	msg := http.StatusText(code)
+	if len(err) > 0 {
+		msg = fmt.Sprintf("%s: %s", msg, err[0].Error())
+	}
+	http.Error(w, msg, code)
 }
 
 func compileTemplates(filenames ...string) (*template.Template, error) {
