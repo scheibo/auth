@@ -18,8 +18,6 @@ import (
 	"runtime"
 	"time"
 
-	"log" // TODO
-
 	"github.com/didip/tollbooth"
 	"github.com/gorilla/securecookie"
 	"github.com/tdewolff/minify"
@@ -108,10 +106,10 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) http.Han
 		_, src, _, _ := runtime.Caller(0)
 		t := template.Must(compileTemplates(filepath.Join(filepath.Dir(src), "login.html")))
 		_ = t.Execute(w, struct {
-			Favicon string
-			Title   string
-			LoginPath    string
-			Token   string
+			Favicon   string
+			Title     string
+			LoginPath string
+			Token     string
 		}{
 			favicon, title, loginPath, c.XSRF(loginPath),
 		})
@@ -151,7 +149,7 @@ func (c *Client) Login(paths ...string) http.Handler {
 		}
 
 		c.session = &Session{
-			id:      string(generateKey()),
+			id:      generateSessionId(),
 			expires: time.Now().AddDate(0, 0, 30),
 		}
 		cookie, err := c.newCookie()
@@ -176,9 +174,8 @@ func (c *Client) Logout(path ...string) http.Handler {
 
 		c.session = nil
 		http.SetCookie(w, &http.Cookie{
-			Name:     "Authorization",
-			Value:    "",
-			Secure:   true,
+			Name:  "Authorization",
+			Value: "",
 			HttpOnly: true,
 			Path:     "/",
 			Expires:  time.Unix(0, 0),
@@ -238,9 +235,9 @@ func (c *Client) IsAuth(r *http.Request) bool {
 		return false
 	}
 	if cookie, err := r.Cookie(CookieName); err == nil {
-		value := make(map[string]string)
+		var value string
 		if err = c.cookie.Decode(CookieName, cookie.Value, &value); err == nil {
-			return value[CookieName] == c.session.id
+			return value == c.session.id
 		}
 	}
 	return false
@@ -255,9 +252,8 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 
 	c.cookie = s
 	return &http.Cookie{
-		Name:     CookieName,
-		Value:    encoded,
-		Secure:   true,
+		Name:  CookieName,
+		Value: encoded,
 		HttpOnly: true,
 		Path:     "/",
 		Expires:  c.session.expires,
@@ -267,6 +263,11 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 func (c *Client) checkPassword(password string) error {
 	sha := sha512.Sum512([]byte(password))
 	return bcrypt.CompareHashAndPassword(c.hash, sha[:64])
+}
+
+func generateSessionId() string {
+	sha := sha512.Sum512(generateKey())
+	return string(sha[:64])
 }
 
 func generateKey() []byte {
