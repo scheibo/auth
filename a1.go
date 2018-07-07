@@ -91,7 +91,7 @@ func New(hash string) *Client {
 // optional path argument or LoginPath. The page can be further customized
 // through the use of CustomLoginPage.
 func (c *Client) LoginPage(path ...string) http.Handler {
-	return c.CustomLoginPage("https://raw.githubusercontent.com/scheibo/auth/master/favicon.png", "Login")
+	return c.CustomLoginPage("https://raw.githubusercontent.com/scheibo/auth/master/favicon.ico", "Login")
 }
 
 // CustomLoginPage allows for tweaking the favicon and title of the page that
