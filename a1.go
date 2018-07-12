@@ -103,8 +103,7 @@ func (c *Client) CustomLoginPage(favicon, title string, path ...string) http.Han
 			loginPath = path[0]
 		}
 
-		_, src, _, _ := runtime.Caller(0)
-		t := template.Must(compileTemplates(filepath.Join(filepath.Dir(src), "login.html")))
+		t := template.Must(compileTemplates(resource("login.html")))
 		_ = t.Execute(w, struct {
 			Favicon   string
 			Title     string
@@ -174,8 +173,8 @@ func (c *Client) Logout(path ...string) http.Handler {
 
 		c.session = nil
 		http.SetCookie(w, &http.Cookie{
-			Name:  "Authorization",
-			Value: "",
+			Name:     "Authorization",
+			Value:    "",
 			HttpOnly: true,
 			Path:     "/",
 			Expires:  time.Unix(0, 0),
@@ -252,8 +251,8 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 
 	c.cookie = s
 	return &http.Cookie{
-		Name:  CookieName,
-		Value: encoded,
+		Name:     CookieName,
+		Value:    encoded,
 		HttpOnly: true,
 		Path:     "/",
 		Expires:  c.session.expires,
@@ -280,6 +279,11 @@ func httpError(w http.ResponseWriter, code int, err ...error) {
 		msg = fmt.Sprintf("%s: %s", msg, err[0].Error())
 	}
 	http.Error(w, msg, code)
+}
+
+func resource(filename string) string {
+	_, src, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(src), "index.html")
 }
 
 func compileTemplates(filenames ...string) (*template.Template, error) {
