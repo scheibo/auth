@@ -18,6 +18,8 @@ import (
 	"runtime"
 	"time"
 
+	"log" // TODO debug
+
 	"github.com/didip/tollbooth"
 	"github.com/gorilla/securecookie"
 	"github.com/tdewolff/minify"
@@ -228,16 +230,23 @@ func (c *Client) EnsureAuth(handler http.Handler) http.Handler {
 // session).
 func (c *Client) IsAuth(r *http.Request) bool {
 	if c.session == nil {
+		log.Printf("session is nil\n") // TODO debug
 		return false
 	}
 	if c.session.expires.Before(time.Now()) {
+		log.Printf("session is expired %s\n", c.session.expires) // TODO debug
 		return false
 	}
 	if cookie, err := r.Cookie(CookieName); err == nil {
 		var value string
 		if err = c.cookie.Decode(CookieName, cookie.Value, &value); err == nil {
+			log.Printf("value == session? %s == %s = %s\n", value, c.session.id, value == c.session.id) // TODO debug
 			return value == c.session.id
+		} else {
+		  log.Printf("cookie decode %s\n", err) // TODO debug
 		}
+	} else {
+		log.Printf("no cookie %s\n", err) // TODO debug
 	}
 	return false
 }
