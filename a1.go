@@ -51,8 +51,8 @@ const CookieName = "Authorization"
 type Client struct {
 	hash []byte
 
-	session *Session
-	cookie  *securecookie.SecureCookie
+	sessions map[string]*Session
+	cookie   *securecookie.SecureCookie
 
 	xsrfKey  string
 	hashKey  []byte
@@ -81,6 +81,7 @@ func Hash(password string) (string, error) {
 func New(hash string) *Client {
 	return &Client{
 		hash:     []byte(hash),
+		sessions: make(map[string]*Session),
 		xsrfKey:  string(generateKey()),
 		hashKey:  generateKey(),
 		blockKey: generateKey(),
@@ -147,11 +148,12 @@ func (c *Client) Login(paths ...string) http.Handler {
 			return
 		}
 
-		c.session = &Session{
+		session := &Session{
 			id:      generateSessionId(),
 			expires: time.Now().AddDate(0, 0, 30),
 		}
-		cookie, err := c.newCookie()
+		c.sessions[session.id] = session
+		cookie, err := c.newCookie(session)
 		if err != nil {
 			httpError(w, 500, err)
 			return
@@ -171,7 +173,6 @@ func (c *Client) Logout(path ...string) http.Handler {
 			redirectPath = path[0]
 		}
 
-		c.session = nil
 		http.SetCookie(w, &http.Cookie{
 			Name:     "Authorization",
 			Value:    "",
@@ -179,6 +180,11 @@ func (c *Client) Logout(path ...string) http.Handler {
 			Path:     "/",
 			Expires:  time.Unix(0, 0),
 		})
+
+		session := c.getSession(r)
+		if session != nil {
+			c.sessions[session.id] = nil
+		}
 
 		http.Redirect(w, r, redirectPath, 302)
 	})
@@ -227,24 +233,29 @@ func (c *Client) EnsureAuth(handler http.Handler) http.Handler {
 // session is present and hasn't expired and the decoded cookie matches the
 // session).
 func (c *Client) IsAuth(r *http.Request) bool {
-	if c.session == nil {
-		return false
-	}
-	if c.session.expires.Before(time.Now()) {
-		return false
+	return c.getSession(r) != nil
+}
+
+func (c *Client) getSession(r *http.Request) *Session {
+	if c.sessions == nil || c.cookie == nil {
+		return nil
 	}
 	if cookie, err := r.Cookie(CookieName); err == nil {
 		var value string
 		if err = c.cookie.Decode(CookieName, cookie.Value, &value); err == nil {
-			return value == c.session.id
+			if session, ok := c.sessions[value]; ok {
+				if !session.expires.Before(time.Now()) {
+					return session
+				}
+			}
 		}
 	}
-	return false
+	return nil
 }
 
-func (c *Client) newCookie() (*http.Cookie, error) {
+func (c *Client) newCookie(session *Session) (*http.Cookie, error) {
 	s := securecookie.New(c.hashKey, c.blockKey)
-	encoded, err := s.Encode(CookieName, c.session.id)
+	encoded, err := s.Encode(CookieName, session.id)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +266,7 @@ func (c *Client) newCookie() (*http.Cookie, error) {
 		Value:    encoded,
 		HttpOnly: true,
 		Path:     "/",
-		Expires:  c.session.expires,
+		Expires:  session.expires,
 	}, nil
 }
 
