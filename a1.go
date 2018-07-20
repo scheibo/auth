@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/didip/tollbooth"
@@ -51,6 +52,7 @@ const CookieName = "Authorization"
 type Client struct {
 	hash []byte
 
+	lock     sync.Mutex
 	sessions map[string]*Session
 	cookie   *securecookie.SecureCookie
 
@@ -152,7 +154,11 @@ func (c *Client) Login(paths ...string) http.Handler {
 			id:      generateSessionId(),
 			expires: time.Now().AddDate(0, 0, 30),
 		}
+
+		c.lock.Lock()
 		c.sessions[session.id] = session
+		c.lock.Unlock()
+
 		cookie, err := c.newCookie(session)
 		if err != nil {
 			httpError(w, 500, err)
@@ -183,7 +189,9 @@ func (c *Client) Logout(path ...string) http.Handler {
 
 		session := c.getSession(r)
 		if session != nil {
+			c.lock.Lock()
 			c.sessions[session.id] = nil
+			c.lock.Unlock()
 		}
 
 		http.Redirect(w, r, redirectPath, 302)
@@ -237,6 +245,9 @@ func (c *Client) IsAuth(r *http.Request) bool {
 }
 
 func (c *Client) getSession(r *http.Request) *Session {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
 	if c.sessions == nil || c.cookie == nil {
 		return nil
 	}
