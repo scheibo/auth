@@ -1,5 +1,5 @@
-// a1 provides simple authentication and authorization helpers for a single user
-// service. Clients should use Hash to hash their password ahead of time,
+// Package a1 provides simple authentication and authorization helpers for a single
+// user service. Clients should use Hash to hash their password ahead of time,
 // then initialize a Client with using New with the hash so that it may then be
 // used to authenticate web sevices. a1 provides its own simple LoginPage which
 // POSTS to /login to complete the Login flow, as well as a handler for Logout.
@@ -53,7 +53,7 @@ type Client struct {
 	hash []byte
 
 	lock     sync.Mutex
-	sessions map[string]*Session
+	sessions map[string]*session
 	cookie   *securecookie.SecureCookie
 
 	xsrfKey  string
@@ -61,9 +61,7 @@ type Client struct {
 	blockKey []byte
 }
 
-// Session holds the state for a logged in user. Sessions expire after an
-// interval (default 30 days).
-type Session struct {
+type session struct {
 	id      string
 	expires time.Time
 }
@@ -83,7 +81,7 @@ func Hash(password string) (string, error) {
 func New(hash string) *Client {
 	return &Client{
 		hash:     []byte(hash),
-		sessions: make(map[string]*Session),
+		sessions: make(map[string]*session),
 		xsrfKey:  string(generateKey()),
 		hashKey:  generateKey(),
 		blockKey: generateKey(),
@@ -150,8 +148,8 @@ func (c *Client) Login(paths ...string) http.Handler {
 			return
 		}
 
-		session := &Session{
-			id:      generateSessionId(),
+		session := &session{
+			id:      generateSessionID(),
 			expires: time.Now().AddDate(0, 0, 30),
 		}
 
@@ -244,7 +242,7 @@ func (c *Client) IsAuth(r *http.Request) bool {
 	return c.getSession(r) != nil
 }
 
-func (c *Client) getSession(r *http.Request) *Session {
+func (c *Client) getSession(r *http.Request) *session {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
@@ -264,7 +262,7 @@ func (c *Client) getSession(r *http.Request) *Session {
 	return nil
 }
 
-func (c *Client) newCookie(session *Session) (*http.Cookie, error) {
+func (c *Client) newCookie(session *session) (*http.Cookie, error) {
 	s := securecookie.New(c.hashKey, c.blockKey)
 	encoded, err := s.Encode(CookieName, session.id)
 	if err != nil {
@@ -286,7 +284,7 @@ func (c *Client) checkPassword(password string) error {
 	return bcrypt.CompareHashAndPassword(c.hash, sha[:64])
 }
 
-func generateSessionId() string {
+func generateSessionID() string {
 	sha := sha512.Sum512(generateKey())
 	return string(sha[:64])
 }
